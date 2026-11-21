@@ -18,14 +18,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          pip install -q gdown
-          for i in 1 2 3; do
-            gdown "1SvWuohjPZ3hmi73vyaldpCEdVt98fiBO" -O src.zip --fuzzy && break
-            echo "retry $i"
-            sleep 5
-          done
+          curl -L --fail --retry 5 --retry-delay 3 -o src.zip \
+            "https://drive.usercontent.google.com/download?id=1SvWuohjPZ3hmi73vyaldpCEdVt98fiBO&export=download&confirm=t"
           ls -lh src.zip
-          python3 -c "import zipfile; zipfile.ZipFile('src.zip').namelist()[:3]"
+          # must be a zip (PK)
+          python3 -c "import sys; d=open('src.zip','rb').read(2); sys.exit(0 if d==b'PK' else 1)"
 
       - name: Extract source
         run: |
