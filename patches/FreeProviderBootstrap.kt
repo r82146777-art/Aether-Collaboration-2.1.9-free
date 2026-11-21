@@ -1,55 +1,60 @@
 package com.zhousl.aether.data
 
+/**
+ * Free keyless OpenAI-compatible providers.
+ * Always use piProviderId = "openai-compatible".
+ * Pollinations: https://text.pollinations.ai/v1 (~1 req / 45s anonymous).
+ */
 object FreeProviderBootstrap {
     const val POLLINATIONS_OPENAI_ID = "aether-free-pollinations-openai"
     const val POLLINATIONS_FAST_ID = "aether-free-pollinations-openai-fast"
     const val LLM7_ID = "aether-free-llm7"
 
     private const val OPENAI_COMPAT = "openai-compatible"
-    private const val POLLINATIONS_BASE = "https://text.pollinations.ai/openai"
+    private const val POLLINATIONS_BASE = "https://text.pollinations.ai/v1"
     private const val LLM7_BASE = "https://api.llm7.io/v1"
 
     fun defaultFreeProviders(): List<LlmProviderConfig> = listOf(
-        LlmProviderConfig(
-            id = POLLINATIONS_OPENAI_ID,
-            providerId = OPENAI_COMPAT,
-            name = "openai (Pollinations)",
-            piProviderId = OPENAI_COMPAT,
-            apiKey = "free",
-            baseUrl = POLLINATIONS_BASE,
-            authMethod = ProviderAuthMethod.ApiKey,
-            modelId = "openai",
-            manualModelIds = listOf("openai", "openai-fast"),
-            cachedModels = listOf("openai", "openai-fast"),
-            enabledModelIds = listOf("openai", "openai-fast"),
-            isEnabled = true,
-        ),
         LlmProviderConfig(
             id = POLLINATIONS_FAST_ID,
             providerId = OPENAI_COMPAT,
             name = "openai-fast (Pollinations)",
             piProviderId = OPENAI_COMPAT,
-            apiKey = "free",
+            apiKey = "",
             baseUrl = POLLINATIONS_BASE,
             authMethod = ProviderAuthMethod.ApiKey,
             modelId = "openai-fast",
-            manualModelIds = listOf("openai-fast", "openai"),
-            cachedModels = listOf("openai-fast", "openai"),
-            enabledModelIds = listOf("openai-fast", "openai"),
+            manualModelIds = listOf("openai-fast", "openai", "gpt-oss-20b"),
+            cachedModels = listOf("openai-fast", "openai", "gpt-oss-20b"),
+            enabledModelIds = listOf("openai-fast", "openai", "gpt-oss-20b"),
+            isEnabled = true,
+        ),
+        LlmProviderConfig(
+            id = POLLINATIONS_OPENAI_ID,
+            providerId = OPENAI_COMPAT,
+            name = "openai (Pollinations)",
+            piProviderId = OPENAI_COMPAT,
+            apiKey = "",
+            baseUrl = POLLINATIONS_BASE,
+            authMethod = ProviderAuthMethod.ApiKey,
+            modelId = "openai",
+            manualModelIds = listOf("openai", "openai-fast", "gpt-oss-20b"),
+            cachedModels = listOf("openai", "openai-fast", "gpt-oss-20b"),
+            enabledModelIds = listOf("openai", "openai-fast", "gpt-oss-20b"),
             isEnabled = true,
         ),
         LlmProviderConfig(
             id = LLM7_ID,
             providerId = OPENAI_COMPAT,
-            name = "LLM7 Free",
+            name = "LLM7 (Inkling-Small)",
             piProviderId = OPENAI_COMPAT,
             apiKey = "free",
             baseUrl = LLM7_BASE,
             authMethod = ProviderAuthMethod.ApiKey,
-            modelId = "gpt-4o-mini",
-            manualModelIds = listOf("gpt-4o-mini", "gpt-4o", "deepseek-v3"),
-            cachedModels = listOf("gpt-4o-mini", "gpt-4o", "deepseek-v3"),
-            enabledModelIds = listOf("gpt-4o-mini", "gpt-4o", "deepseek-v3"),
+            modelId = "Inkling-Small",
+            manualModelIds = listOf("Inkling-Small"),
+            cachedModels = listOf("Inkling-Small"),
+            enabledModelIds = listOf("Inkling-Small"),
             isEnabled = true,
         ),
     )
@@ -58,25 +63,34 @@ object FreeProviderBootstrap {
         val byId = existing.associateBy { it.id }.toMutableMap()
         val badIds = setOf("pollinations", "pollinations-fast", "llm7")
         for ((id, cfg) in byId.toList()) {
-            if (cfg.piProviderId in badIds) {
-                val fixedBase = when {
-                    "pollinations" in cfg.piProviderId || "pollinations" in cfg.baseUrl -> POLLINATIONS_BASE
-                    "llm7" in cfg.piProviderId || "llm7" in cfg.baseUrl -> LLM7_BASE
-                    else -> cfg.baseUrl.ifBlank { POLLINATIONS_BASE }
-                }
-                byId[id] = cfg.copy(
-                    providerId = OPENAI_COMPAT,
-                    piProviderId = OPENAI_COMPAT,
-                    baseUrl = fixedBase,
-                    authMethod = ProviderAuthMethod.ApiKey,
-                    apiKey = cfg.apiKey.ifBlank { "free" },
-                )
+            if (cfg.piProviderId in badIds ||
+                (cfg.id.startsWith("aether-free-") && cfg.piProviderId != OPENAI_COMPAT)
+            ) {
+                byId[id] = defaultFreeProviders().firstOrNull { it.id == id }
+                    ?: cfg.copy(
+                        providerId = OPENAI_COMPAT,
+                        piProviderId = OPENAI_COMPAT,
+                        baseUrl = when {
+                            "llm7" in cfg.baseUrl -> LLM7_BASE
+                            else -> POLLINATIONS_BASE
+                        },
+                        authMethod = ProviderAuthMethod.ApiKey,
+                        apiKey = if ("llm7" in cfg.baseUrl) "free" else "",
+                    )
+            }
+            if (cfg.id.startsWith("aether-free-pollinations") &&
+                cfg.baseUrl.contains("text.pollinations.ai") &&
+                !cfg.baseUrl.contains("/v1")
+            ) {
+                byId[id] = (byId[id] ?: cfg).copy(baseUrl = POLLINATIONS_BASE, apiKey = "")
             }
         }
         for (free in defaultFreeProviders()) {
             val current = byId[free.id]
-            if (current == null || current.piProviderId in badIds || current.piProviderId != OPENAI_COMPAT) {
+            if (current == null || current.piProviderId != OPENAI_COMPAT) {
                 byId[free.id] = free
+            } else {
+                byId[free.id] = free.copy(id = free.id)
             }
         }
         return byId.values.toList()
