@@ -1,29 +1,23 @@
 # Aether Collaboration 2.1.9-free
 
-Modified Aether Collaboration with **free, keyless AI models**.
+Free Pollinations models (`openai` / `openai-fast`) without API key.
 
-## Download full source + signing (50 MB)
+## Build APK on GitHub Actions
 
-**Google Drive:** https://drive.google.com/uc?export=download&id=1R6KunKXGlmMJQc6H7ieEdJSynXt0dg93
+1. Open: https://github.com/r82146777-art/Aether-Collaboration-2.1.9-free/actions
+2. Select **Build Collaboration Free APK** → **Run workflow**
+3. When green, download from **Artifacts** or Release **v2.1.9-free**
 
-Or: https://drive.google.com/file/d/1R6KunKXGlmMJQc6H7ieEdJSynXt0dg93/view?usp=drivesdk
+## Source + signing (50 MB)
 
-## Free models (no API key, no Termux)
+https://drive.google.com/uc?export=download&id=1SvWuohjPZ3hmi73vyaldpCEdVt98fiBO
 
-| Name | Endpoint | Models |
-|------|----------|--------|
-| free openai | `https://text.pollinations.ai/openai` | `openai` |
-| free openai-fast | same | `openai-fast` |
-| free LLM7 | `https://api.llm7.io/v1` | `gpt-4o-mini` |
+## Models
 
-These are added automatically on first launch.
+| Name | URL | Models |
+|------|-----|--------|
+| openai | text.pollinations.ai/openai | openai |
+| openai-fast | same | openai-fast |
+| LLM7 | api.llm7.io/v1 | gpt-4o-mini |
 
-## Collaboration
-
-Use the collaboration controls in chat so multiple models can share work; results are merged into one reply.
-
-## Build
-
-Open the source folder in Android Studio, use the included signing keystore under `signing/`, and build the collaboration release variant.
-
-Version: **2.1.9-free** (versionCode 13)
+Auto-added on first launch. Collaboration rooms merge multi-model output.
