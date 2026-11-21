@@ -1,9 +1,11 @@
 package com.zhousl.aether.data
 
 /**
- * Free keyless OpenAI-compatible providers.
+ * Free OpenAI-compatible providers for Pi.
+ *
+ * Pi requires a non-empty apiKey for custom openai-compatible providers
+ * even when the upstream is keyless — use a dummy value.
  * Always use piProviderId = "openai-compatible".
- * Pollinations: https://text.pollinations.ai/v1 (~1 req / 45s anonymous).
  */
 object FreeProviderBootstrap {
     const val POLLINATIONS_OPENAI_ID = "aether-free-pollinations-openai"
@@ -13,6 +15,8 @@ object FreeProviderBootstrap {
     private const val OPENAI_COMPAT = "openai-compatible"
     private const val POLLINATIONS_BASE = "https://text.pollinations.ai/v1"
     private const val LLM7_BASE = "https://api.llm7.io/v1"
+    private const val POLLINATIONS_KEY = "pollinations"
+    private const val LLM7_KEY = "free"
 
     fun defaultFreeProviders(): List<LlmProviderConfig> = listOf(
         LlmProviderConfig(
@@ -20,7 +24,7 @@ object FreeProviderBootstrap {
             providerId = OPENAI_COMPAT,
             name = "openai-fast (Pollinations)",
             piProviderId = OPENAI_COMPAT,
-            apiKey = "",
+            apiKey = POLLINATIONS_KEY,
             baseUrl = POLLINATIONS_BASE,
             authMethod = ProviderAuthMethod.ApiKey,
             modelId = "openai-fast",
@@ -34,7 +38,7 @@ object FreeProviderBootstrap {
             providerId = OPENAI_COMPAT,
             name = "openai (Pollinations)",
             piProviderId = OPENAI_COMPAT,
-            apiKey = "",
+            apiKey = POLLINATIONS_KEY,
             baseUrl = POLLINATIONS_BASE,
             authMethod = ProviderAuthMethod.ApiKey,
             modelId = "openai",
@@ -48,7 +52,7 @@ object FreeProviderBootstrap {
             providerId = OPENAI_COMPAT,
             name = "LLM7 (Inkling-Small)",
             piProviderId = OPENAI_COMPAT,
-            apiKey = "free",
+            apiKey = LLM7_KEY,
             baseUrl = LLM7_BASE,
             authMethod = ProviderAuthMethod.ApiKey,
             modelId = "Inkling-Small",
@@ -60,37 +64,22 @@ object FreeProviderBootstrap {
     )
 
     fun mergeInto(existing: List<LlmProviderConfig>): List<LlmProviderConfig> {
+        val freeById = defaultFreeProviders().associateBy { it.id }
         val byId = existing.associateBy { it.id }.toMutableMap()
-        val badIds = setOf("pollinations", "pollinations-fast", "llm7")
-        for ((id, cfg) in byId.toList()) {
-            if (cfg.piProviderId in badIds ||
-                (cfg.id.startsWith("aether-free-") && cfg.piProviderId != OPENAI_COMPAT)
-            ) {
-                byId[id] = defaultFreeProviders().firstOrNull { it.id == id }
-                    ?: cfg.copy(
-                        providerId = OPENAI_COMPAT,
-                        piProviderId = OPENAI_COMPAT,
-                        baseUrl = when {
-                            "llm7" in cfg.baseUrl -> LLM7_BASE
-                            else -> POLLINATIONS_BASE
-                        },
-                        authMethod = ProviderAuthMethod.ApiKey,
-                        apiKey = if ("llm7" in cfg.baseUrl) "free" else "",
-                    )
-            }
-            if (cfg.id.startsWith("aether-free-pollinations") &&
-                cfg.baseUrl.contains("text.pollinations.ai") &&
-                !cfg.baseUrl.contains("/v1")
-            ) {
-                byId[id] = (byId[id] ?: cfg).copy(baseUrl = POLLINATIONS_BASE, apiKey = "")
-            }
+        for ((id, free) in freeById) {
+            byId[id] = free
         }
-        for (free in defaultFreeProviders()) {
-            val current = byId[free.id]
-            if (current == null || current.piProviderId != OPENAI_COMPAT) {
-                byId[free.id] = free
-            } else {
-                byId[free.id] = free.copy(id = free.id)
+        val badPi = setOf("pollinations", "pollinations-fast", "llm7")
+        for ((id, cfg) in byId.toList()) {
+            if (id in freeById) continue
+            if (cfg.piProviderId in badPi) {
+                byId[id] = cfg.copy(
+                    providerId = OPENAI_COMPAT,
+                    piProviderId = OPENAI_COMPAT,
+                    baseUrl = if ("llm7" in cfg.piProviderId || "llm7" in cfg.baseUrl) LLM7_BASE else POLLINATIONS_BASE,
+                    authMethod = ProviderAuthMethod.ApiKey,
+                    apiKey = if ("llm7" in cfg.baseUrl) LLM7_KEY else POLLINATIONS_KEY,
+                )
             }
         }
         return byId.values.toList()
