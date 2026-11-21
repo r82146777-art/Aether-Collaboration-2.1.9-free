@@ -21,7 +21,6 @@ jobs:
           curl -L --fail --retry 5 --retry-delay 3 -o src.zip \
             "https://drive.usercontent.google.com/download?id=1SvWuohjPZ3hmi73vyaldpCEdVt98fiBO&export=download&confirm=t"
           ls -lh src.zip
-          # must be a zip (PK)
           python3 -c "import sys; d=open('src.zip','rb').read(2); sys.exit(0 if d==b'PK' else 1)"
 
       - name: Extract source
@@ -42,6 +41,10 @@ jobs:
           set -euo pipefail
           cp patches/FreeProviderBootstrap.kt \
             "$SRC/shared/src/commonMain/kotlin/com/zhousl/aether/data/FreeProviderBootstrap.kt"
+          if [ -f "$SRC/pi-bridge/src/collaboration.ts" ]; then
+            sed -i 's/AbortSignal.timeout(110_000)/AbortSignal.timeout(300_000)/g' "$SRC/pi-bridge/src/collaboration.ts" || true
+            sed -i 's/AbortSignal.timeout(48_000)/AbortSignal.timeout(180_000)/g' "$SRC/pi-bridge/src/collaboration.ts" || true
+          fi
           python3 <<'PY'
           from pathlib import Path
           import os
@@ -56,9 +59,8 @@ jobs:
           p.write_text(t)
           bg = src / "app/build.gradle.kts"
           bt = bg.read_text()
-          bt = bt.replace('?: "2.1.9-free"', '?: "2.1.10-free"')
-          bt = bt.replace("versionCode = 13", "versionCode = 14")
-          bt = bt.replace("versionCode = 12", "versionCode = 14")
+          for a,b in [('?: "2.1.9-free"','?: "2.1.11-free"'),('?: "2.1.10-free"','?: "2.1.11-free"'),('versionCode = 12','versionCode = 15'),('versionCode = 13','versionCode = 15'),('versionCode = 14','versionCode = 15')]:
+              bt = bt.replace(a,b)
           bg.write_text(bt)
           print("patched ok")
           PY
@@ -110,20 +112,7 @@ jobs:
           if 'create("collaboration")' not in t:
               t = t.replace(
                   '    signingConfigs {\n        create("nightly") {',
-                  '''    signingConfigs {
-          create("collaboration") {
-              val collabStore = localOrEnv("collab.storeFile", "COLLAB_KEYSTORE_FILE")
-              val collabPass = localOrEnv("collab.storePassword", "COLLAB_KEYSTORE_PASSWORD")
-              val collabAlias = localOrEnv("collab.keyAlias", "COLLAB_KEY_ALIAS").ifBlank { "aether-collaboration" }
-              val collabKeyPass = localOrEnv("collab.keyPassword", "COLLAB_KEY_PASSWORD").ifBlank { collabPass }
-              if (collabStore.isNotBlank() && collabPass.isNotBlank()) {
-                  storeFile = file(collabStore)
-                  storePassword = collabPass
-                  keyAlias = collabAlias
-                  keyPassword = collabKeyPass
-              }
-          }
-          create("nightly") {''',
+                  '    signingConfigs {\n        create("collaboration") {\n            val collabStore = localOrEnv("collab.storeFile", "COLLAB_KEYSTORE_FILE")\n            val collabPass = localOrEnv("collab.storePassword", "COLLAB_KEYSTORE_PASSWORD")\n            val collabAlias = localOrEnv("collab.keyAlias", "COLLAB_KEY_ALIAS").ifBlank { "aether-collaboration" }\n            val collabKeyPass = localOrEnv("collab.keyPassword", "COLLAB_KEY_PASSWORD").ifBlank { collabPass }\n            if (collabStore.isNotBlank() && collabPass.isNotBlank()) {\n                storeFile = file(collabStore)\n                storePassword = collabPass\n                keyAlias = collabAlias\n                keyPassword = collabKeyPass\n            }\n        }\n        create("nightly") {',
                   1,
               )
           if 'signingConfigs.findByName("collaboration")' not in t and 'getByName("collaboration")' not in t:
@@ -145,7 +134,7 @@ jobs:
           COLLAB_KEY_PASSWORD: ${{ env.COLLAB_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          ./gradlew :app:assembleRelease --stacktrace -Paether.versionName="2.1.10-free" 2>&1 | tee /tmp/gradle-build.log
+          ./gradlew :app:assembleRelease --stacktrace -Paether.versionName="2.1.11-free" 2>&1 | tee /tmp/gradle-build.log
           tail -40 /tmp/gradle-build.log
 
       - name: Collect APK
@@ -155,14 +144,14 @@ jobs:
           mkdir -p dist
           APK=$(find "$SRC/app/build/outputs/apk" -name '*.apk' | head -1)
           test -n "$APK"
-          cp "$APK" dist/Aether-Collaboration-2.1.10-free.apk
+          cp "$APK" dist/Aether-Collaboration-2.1.11-free.apk
           ls -lh dist/
 
       - name: Upload APK artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Aether-Collaboration-2.1.10-free
+          name: Aether-Collaboration-2.1.11-free
           path: dist/*.apk
 
       - name: Upload build log on failure
@@ -177,10 +166,11 @@ jobs:
         if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.1.10-free
-          name: Aether Collaboration 2.1.10-free
+          tag_name: v2.1.11-free
+          name: Aether Collaboration 2.1.11-free
           body: |
-            Fix: Unknown built-in Pi provider — free models use openai-compatible.
-          files: dist/Aether-Collaboration-2.1.10-free.apk
+            Timeout fixes: Pollinations base URL /v1 + longer collaboration timeouts.
+            Tip: wait ~45 seconds between free Pollinations messages (anonymous rate limit).
+          files: dist/Aether-Collaboration-2.1.11-free.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
