@@ -11,14 +11,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
+      - name: Checkout patches
+        uses: actions/checkout@v4
+
       - name: Download public source package
         shell: bash
         run: |
           set -euo pipefail
           pip install -q gdown
-          # Already shared publicly by user
-          gdown "1SvWuohjPZ3hmi73vyaldpCEdVt98fiBO" -O src.zip --fuzzy
+          for i in 1 2 3; do
+            gdown "1SvWuohjPZ3hmi73vyaldpCEdVt98fiBO" -O src.zip --fuzzy && break
+            echo "retry $i"
+            sleep 5
+          done
           ls -lh src.zip
+          python3 -c "import zipfile; zipfile.ZipFile('src.zip').namelist()[:3]"
 
       - name: Extract source
         run: |
@@ -33,117 +40,30 @@ jobs:
           test -f "$SRC/gradlew"
           test -f "$SIGN/aether-collaboration.p12"
 
-      - name: Patch free providers to openai-compatible
-        working-directory: ${{ env.SRC }}
+      - name: Apply free-provider fix from repo
         run: |
           set -euo pipefail
-          cat > shared/src/commonMain/kotlin/com/zhousl/aether/data/FreeProviderBootstrap.kt << 'EOF'
-          package com.zhousl.aether.data
-
-          object FreeProviderBootstrap {
-              const val POLLINATIONS_OPENAI_ID = "aether-free-pollinations-openai"
-              const val POLLINATIONS_FAST_ID = "aether-free-pollinations-openai-fast"
-              const val LLM7_ID = "aether-free-llm7"
-
-              private const val OPENAI_COMPAT = "openai-compatible"
-              private const val POLLINATIONS_BASE = "https://text.pollinations.ai/openai"
-              private const val LLM7_BASE = "https://api.llm7.io/v1"
-
-              fun defaultFreeProviders(): List<LlmProviderConfig> = listOf(
-                  LlmProviderConfig(
-                      id = POLLINATIONS_OPENAI_ID,
-                      providerId = OPENAI_COMPAT,
-                      name = "openai (Pollinations)",
-                      piProviderId = OPENAI_COMPAT,
-                      apiKey = "free",
-                      baseUrl = POLLINATIONS_BASE,
-                      authMethod = ProviderAuthMethod.ApiKey,
-                      modelId = "openai",
-                      manualModelIds = listOf("openai", "openai-fast"),
-                      cachedModels = listOf("openai", "openai-fast"),
-                      enabledModelIds = listOf("openai", "openai-fast"),
-                      isEnabled = true,
-                  ),
-                  LlmProviderConfig(
-                      id = POLLINATIONS_FAST_ID,
-                      providerId = OPENAI_COMPAT,
-                      name = "openai-fast (Pollinations)",
-                      piProviderId = OPENAI_COMPAT,
-                      apiKey = "free",
-                      baseUrl = POLLINATIONS_BASE,
-                      authMethod = ProviderAuthMethod.ApiKey,
-                      modelId = "openai-fast",
-                      manualModelIds = listOf("openai-fast", "openai"),
-                      cachedModels = listOf("openai-fast", "openai"),
-                      enabledModelIds = listOf("openai-fast", "openai"),
-                      isEnabled = true,
-                  ),
-                  LlmProviderConfig(
-                      id = LLM7_ID,
-                      providerId = OPENAI_COMPAT,
-                      name = "LLM7 Free",
-                      piProviderId = OPENAI_COMPAT,
-                      apiKey = "free",
-                      baseUrl = LLM7_BASE,
-                      authMethod = ProviderAuthMethod.ApiKey,
-                      modelId = "gpt-4o-mini",
-                      manualModelIds = listOf("gpt-4o-mini", "gpt-4o", "deepseek-v3"),
-                      cachedModels = listOf("gpt-4o-mini", "gpt-4o", "deepseek-v3"),
-                      enabledModelIds = listOf("gpt-4o-mini", "gpt-4o", "deepseek-v3"),
-                      isEnabled = true,
-                  ),
-              )
-
-              fun mergeInto(existing: List<LlmProviderConfig>): List<LlmProviderConfig> {
-                  val byId = existing.associateBy { it.id }.toMutableMap()
-                  val badIds = setOf("pollinations", "pollinations-fast", "llm7")
-                  for ((id, cfg) in byId.toList()) {
-                      if (cfg.piProviderId in badIds) {
-                          val fixedBase = when {
-                              "pollinations" in cfg.piProviderId || "pollinations" in cfg.baseUrl -> POLLINATIONS_BASE
-                              "llm7" in cfg.piProviderId || "llm7" in cfg.baseUrl -> LLM7_BASE
-                              else -> cfg.baseUrl.ifBlank { POLLINATIONS_BASE }
-                          }
-                          byId[id] = cfg.copy(
-                              providerId = OPENAI_COMPAT,
-                              piProviderId = OPENAI_COMPAT,
-                              baseUrl = fixedBase,
-                              authMethod = ProviderAuthMethod.ApiKey,
-                              apiKey = cfg.apiKey.ifBlank { "free" },
-                          )
-                      }
-                  }
-                  for (free in defaultFreeProviders()) {
-                      val current = byId[free.id]
-                      if (current == null || current.piProviderId in badIds || current.piProviderId != OPENAI_COMPAT) {
-                          byId[free.id] = free
-                      }
-                  }
-                  return byId.values.toList()
-              }
-          }
-          EOF
-          # Force rewrite SettingsRepository ensureFreeProviders to always persist repairs
+          cp patches/FreeProviderBootstrap.kt \
+            "$SRC/shared/src/commonMain/kotlin/com/zhousl/aether/data/FreeProviderBootstrap.kt"
           python3 <<'PY'
           from pathlib import Path
-          p = Path("app/src/main/java/com/zhousl/aether/data/SettingsRepository.kt")
+          import os
+          src = Path(os.environ["SRC"])
+          p = src / "app/src/main/java/com/zhousl/aether/data/SettingsRepository.kt"
           t = p.read_text()
-          if "Always persist so repaired" not in t:
-              t2 = t.replace(
-                  "if (merged.size != current.size) {\n                prefs[PROVIDER_CONFIGS] = serializeProviderConfigs(merged)\n            }",
-                  "prefs[PROVIDER_CONFIGS] = serializeProviderConfigs(merged)",
-                  1,
-              )
-              p.write_text(t2)
-              print("settings patched")
-          else:
-              print("settings already patched")
-          # bump version
-          bg = Path("app/build.gradle.kts")
+          t = t.replace(
+              "if (merged.size != current.size) {\n                prefs[PROVIDER_CONFIGS] = serializeProviderConfigs(merged)\n            }",
+              "prefs[PROVIDER_CONFIGS] = serializeProviderConfigs(merged)",
+              1,
+          )
+          p.write_text(t)
+          bg = src / "app/build.gradle.kts"
           bt = bg.read_text()
-          bt = bt.replace('?: "2.1.9-free"', '?: "2.1.10-free"').replace('versionCode = 13', 'versionCode = 14').replace('versionCode = 12', 'versionCode = 14')
+          bt = bt.replace('?: "2.1.9-free"', '?: "2.1.10-free"')
+          bt = bt.replace("versionCode = 13", "versionCode = 14")
+          bt = bt.replace("versionCode = 12", "versionCode = 14")
           bg.write_text(bt)
-          print("version bumped")
+          print("patched ok")
           PY
 
       - name: Set up JDK 17
@@ -263,8 +183,7 @@ jobs:
           tag_name: v2.1.10-free
           name: Aether Collaboration 2.1.10-free
           body: |
-            Fix Unknown built-in Pi provider: free models now use openai-compatible.
-            Pollinations openai / openai-fast + LLM7.
+            Fix: Unknown built-in Pi provider — free models use openai-compatible.
           files: dist/Aether-Collaboration-2.1.10-free.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
