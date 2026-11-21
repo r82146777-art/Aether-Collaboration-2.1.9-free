@@ -1,22 +1,13 @@
-# Aether Collaboration 2.1.9-free
+# Aether Collaboration free builds
 
-## APK build on GitHub Actions
+## Latest fix (2.1.10)
+Free models now use `openai-compatible` so Pi no longer errors with `Unknown built-in Pi provider: llm7`.
 
-**Important:** On Google Drive, set the source zip to **Anyone with the link** (Viewer):
-https://drive.google.com/file/d/1SvWuohjPZ3hmi73vyaldpCEdVt98fiBO/view
+## Share new source zip (required for CI)
+https://drive.google.com/file/d/1WMWPn62wpBCPCavmP-mzOxezflhktnow/view
+Set to **Anyone with the link**.
 
-Then:
-1. Open https://github.com/r82146777-art/Aether-Collaboration-2.1.9-free/actions
-2. **Build Collaboration Free APK** → **Run workflow**
-3. Download APK from **Artifacts** or Release **v2.1.9-free**
+Then run Actions → Build Collaboration Free APK.
 
-Local build is also running in the project workspace; when finished the APK will be uploaded to Drive.
-
-## Free models (no key)
-
-- openai / openai-fast via Pollinations
-- LLM7 free
-
-## Source
-
-https://drive.google.com/uc?export=download&id=1SvWuohjPZ3hmi73vyaldpCEdVt98fiBO
+## Previous APK (2.1.9)
+https://github.com/r82146777-art/Aether-Collaboration-2.1.9-free/releases/tag/v2.1.9-free
