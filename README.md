@@ -1,23 +1,22 @@
 # Aether Collaboration 2.1.9-free
 
-Free Pollinations models (`openai` / `openai-fast`) without API key.
+## APK build on GitHub Actions
 
-## Build APK on GitHub Actions
+**Important:** On Google Drive, set the source zip to **Anyone with the link** (Viewer):
+https://drive.google.com/file/d/1SvWuohjPZ3hmi73vyaldpCEdVt98fiBO/view
 
-1. Open: https://github.com/r82146777-art/Aether-Collaboration-2.1.9-free/actions
-2. Select **Build Collaboration Free APK** → **Run workflow**
-3. When green, download from **Artifacts** or Release **v2.1.9-free**
+Then:
+1. Open https://github.com/r82146777-art/Aether-Collaboration-2.1.9-free/actions
+2. **Build Collaboration Free APK** → **Run workflow**
+3. Download APK from **Artifacts** or Release **v2.1.9-free**
 
-## Source + signing (50 MB)
+Local build is also running in the project workspace; when finished the APK will be uploaded to Drive.
+
+## Free models (no key)
+
+- openai / openai-fast via Pollinations
+- LLM7 free
+
+## Source
 
 https://drive.google.com/uc?export=download&id=1SvWuohjPZ3hmi73vyaldpCEdVt98fiBO
-
-## Models
-
-| Name | URL | Models |
-|------|-----|--------|
-| openai | text.pollinations.ai/openai | openai |
-| openai-fast | same | openai-fast |
-| LLM7 | api.llm7.io/v1 | gpt-4o-mini |
-
-Auto-added on first launch. Collaboration rooms merge multi-model output.
