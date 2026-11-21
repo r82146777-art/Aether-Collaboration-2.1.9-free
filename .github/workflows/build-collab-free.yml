@@ -47,7 +47,7 @@ jobs:
           fi
           python3 <<'PY'
           from pathlib import Path
-          import os
+          import os, re
           src = Path(os.environ["SRC"])
           p = src / "app/src/main/java/com/zhousl/aether/data/SettingsRepository.kt"
           t = p.read_text()
@@ -56,10 +56,59 @@ jobs:
               "prefs[PROVIDER_CONFIGS] = serializeProviderConfigs(merged)",
               1,
           )
+          # Force active free provider to write non-empty API key into prefs every startup
+          old = """val activeId = prefs[PROVIDER_CONFIG_ID].orEmpty()
+            if (activeId.isBlank() || merged.none { it.id == activeId }) {
+                val free = merged.firstOrNull { it.id == FreeProviderBootstrap.POLLINATIONS_OPENAI_ID }
+                    ?: merged.firstOrNull()
+                if (free != null) {
+                    prefs[PROVIDER_CONFIG_ID] = free.id
+                    prefs[PI_PROVIDER_ID] = free.piProviderId
+                    prefs[PROVIDER_AUTH_METHOD] = free.authMethod.storageValue
+                    prefs[API_KEY] = free.apiKey
+                    prefs[BASE_URL] = free.baseUrl
+                    prefs[MODEL_ID] = free.modelId
+                }
+            }"""
+          new = """val activeId = prefs[PROVIDER_CONFIG_ID].orEmpty()
+            val active = merged.firstOrNull { it.id == activeId }
+            val freeIds = setOf(
+                FreeProviderBootstrap.POLLINATIONS_OPENAI_ID,
+                FreeProviderBootstrap.POLLINATIONS_FAST_ID,
+                FreeProviderBootstrap.LLM7_ID,
+            )
+            val needsFree = active == null || activeId.isBlank() ||
+                active.piProviderId in setOf("pollinations", "pollinations-fast", "llm7") ||
+                (activeId in freeIds && active.apiKey.isBlank())
+            if (needsFree) {
+                val free = merged.firstOrNull { it.id == FreeProviderBootstrap.POLLINATIONS_FAST_ID }
+                    ?: merged.firstOrNull { it.id == FreeProviderBootstrap.POLLINATIONS_OPENAI_ID }
+                    ?: merged.firstOrNull()
+                if (free != null) {
+                    prefs[PROVIDER_CONFIG_ID] = free.id
+                    prefs[PI_PROVIDER_ID] = free.piProviderId
+                    prefs[PROVIDER_AUTH_METHOD] = free.authMethod.storageValue
+                    prefs[API_KEY] = free.apiKey.ifBlank { "pollinations" }
+                    prefs[BASE_URL] = free.baseUrl
+                    prefs[MODEL_ID] = free.modelId
+                }
+            } else if (active != null && activeId in freeIds) {
+                // Always refresh free provider credentials from template
+                prefs[PI_PROVIDER_ID] = active.piProviderId
+                prefs[PROVIDER_AUTH_METHOD] = active.authMethod.storageValue
+                prefs[API_KEY] = active.apiKey.ifBlank { "pollinations" }
+                prefs[BASE_URL] = active.baseUrl
+                if (active.modelId.isNotBlank()) prefs[MODEL_ID] = active.modelId
+            }"""
+          if old in t:
+              t = t.replace(old, new, 1)
+              print("ensureFreeProviders body replaced")
+          else:
+              print("WARN: ensureFreeProviders pattern not exact; only size-fix applied")
           p.write_text(t)
           bg = src / "app/build.gradle.kts"
           bt = bg.read_text()
-          for a,b in [('?: "2.1.9-free"','?: "2.1.11-free"'),('?: "2.1.10-free"','?: "2.1.11-free"'),('versionCode = 12','versionCode = 15'),('versionCode = 13','versionCode = 15'),('versionCode = 14','versionCode = 15')]:
+          for a,b in [('?: "2.1.9-free"','?: "2.1.12-free"'),('?: "2.1.10-free"','?: "2.1.12-free"'),('?: "2.1.11-free"','?: "2.1.12-free"'),('versionCode = 12','versionCode = 16'),('versionCode = 13','versionCode = 16'),('versionCode = 14','versionCode = 16'),('versionCode = 15','versionCode = 16')]:
               bt = bt.replace(a,b)
           bg.write_text(bt)
           print("patched ok")
@@ -134,7 +183,7 @@ jobs:
           COLLAB_KEY_PASSWORD: ${{ env.COLLAB_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          ./gradlew :app:assembleRelease --stacktrace -Paether.versionName="2.1.11-free" 2>&1 | tee /tmp/gradle-build.log
+          ./gradlew :app:assembleRelease --stacktrace -Paether.versionName="2.1.12-free" 2>&1 | tee /tmp/gradle-build.log
           tail -40 /tmp/gradle-build.log
 
       - name: Collect APK
@@ -144,14 +193,14 @@ jobs:
           mkdir -p dist
           APK=$(find "$SRC/app/build/outputs/apk" -name '*.apk' | head -1)
           test -n "$APK"
-          cp "$APK" dist/Aether-Collaboration-2.1.11-free.apk
+          cp "$APK" dist/Aether-Collaboration-2.1.12-free.apk
           ls -lh dist/
 
       - name: Upload APK artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Aether-Collaboration-2.1.11-free
+          name: Aether-Collaboration-2.1.12-free
           path: dist/*.apk
 
       - name: Upload build log on failure
@@ -166,11 +215,11 @@ jobs:
         if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.1.11-free
-          name: Aether Collaboration 2.1.11-free
+          tag_name: v2.1.12-free
+          name: Aether Collaboration 2.1.12-free
           body: |
-            Timeout fixes: Pollinations base URL /v1 + longer collaboration timeouts.
-            Tip: wait ~45 seconds between free Pollinations messages (anonymous rate limit).
-          files: dist/Aether-Collaboration-2.1.11-free.apk
+            Root fix: free providers now send a dummy non-empty API key so Pi accepts them.
+            Pollinations ignores the key; openai-compatible requires it.
+          files: dist/Aether-Collaboration-2.1.12-free.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
